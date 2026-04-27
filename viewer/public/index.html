@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>백엔드 멘토 — 문서 뷰어</title>
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <style>
+    :root {
+      --bg: #0f1117;
+      --surface: #1a1d27;
+      --border: #2a2d3a;
+      --text: #e2e8f0;
+      --muted: #64748b;
+      --accent: #6366f1;
+      --warn: #7c3aed;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    header {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 12px 20px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-shrink: 0;
+    }
+
+    header h1 { font-size: 16px; font-weight: 600; }
+    header .tag {
+      background: var(--warn);
+      color: white;
+      font-size: 11px;
+      padding: 2px 8px;
+      border-radius: 99px;
+      font-weight: 500;
+    }
+    header .hint-text {
+      margin-left: auto;
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    .tabs {
+      display: flex;
+      border-bottom: 1px solid var(--border);
+      background: var(--surface);
+      flex-shrink: 0;
+    }
+
+    .tab-btn {
+      padding: 10px 20px;
+      background: transparent;
+      border: none;
+      color: var(--muted);
+      cursor: pointer;
+      font-size: 13px;
+      border-bottom: 2px solid transparent;
+      transition: all 0.15s;
+    }
+    .tab-btn.active { color: var(--accent); border-bottom-color: var(--accent); }
+    .tab-btn:hover:not(.active) { color: var(--text); }
+
+    .content-area {
+      flex: 1;
+      overflow: hidden;
+      display: flex;
+    }
+
+    .tab-pane {
+      display: none;
+      flex: 1;
+      overflow-y: auto;
+      padding: 24px 32px;
+    }
+    .tab-pane.active { display: block; }
+
+    /* 이론 탭 — 좌측 리스트 + 우측 내용 */
+    #tab-theory.active { display: flex; padding: 0; }
+    .theory-list-pane {
+      width: 280px;
+      border-right: 1px solid var(--border);
+      overflow-y: auto;
+      padding: 16px;
+      flex-shrink: 0;
+    }
+    .theory-content-pane {
+      flex: 1;
+      overflow-y: auto;
+      padding: 24px 32px;
+    }
+
+    .theory-group-title {
+      font-size: 11px;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin: 10px 8px 6px;
+    }
+    .theory-list { list-style: none; }
+    .theory-item {
+      padding: 8px 10px;
+      cursor: pointer;
+      border-radius: 6px;
+      font-size: 13px;
+      color: var(--muted);
+      transition: all 0.15s;
+      margin-bottom: 2px;
+    }
+    .theory-item:hover { background: var(--surface); color: var(--text); }
+    .theory-item.active { background: rgba(99, 102, 241, 0.15); color: var(--accent); }
+
+    .markdown-body {
+      font-size: 14px;
+      line-height: 1.75;
+      color: var(--text);
+      max-width: 860px;
+    }
+    .markdown-body h1 { font-size: 22px; margin-bottom: 14px; color: #a5b4fc; }
+    .markdown-body h2 { font-size: 17px; margin: 24px 0 10px; color: #93c5fd; border-bottom: 1px solid var(--border); padding-bottom: 6px; }
+    .markdown-body h3 { font-size: 15px; margin: 18px 0 8px; color: #fbbf24; }
+    .markdown-body h4 { font-size: 14px; margin: 14px 0 6px; color: #e2e8f0; }
+    .markdown-body p { margin-bottom: 12px; }
+    .markdown-body ul, .markdown-body ol { margin: 8px 0 12px 22px; }
+    .markdown-body li { margin-bottom: 4px; }
+    .markdown-body code { background: #1e2030; padding: 2px 6px; border-radius: 4px; font-family: "SF Mono", Menlo, monospace; font-size: 13px; color: #7dd3fc; }
+    .markdown-body pre { background: #1e2030; padding: 14px; border-radius: 8px; overflow-x: auto; margin: 12px 0; }
+    .markdown-body pre code { background: none; padding: 0; color: #e2e8f0; font-size: 12.5px; }
+    .markdown-body strong { color: #f8fafc; }
+    .markdown-body blockquote { border-left: 3px solid var(--accent); padding-left: 12px; color: var(--muted); margin: 12px 0; }
+    .markdown-body table { width: 100%; border-collapse: collapse; font-size: 13px; margin: 10px 0; }
+    .markdown-body th { background: var(--surface); padding: 8px 12px; text-align: left; border: 1px solid var(--border); }
+    .markdown-body td { padding: 8px 12px; border: 1px solid var(--border); }
+    .markdown-body hr { border: none; border-top: 1px solid var(--border); margin: 20px 0; }
+
+    .empty-msg {
+      color: var(--muted);
+      font-size: 13px;
+      text-align: center;
+      padding: 40px 20px;
+    }
+
+    ::-webkit-scrollbar { width: 8px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+    ::-webkit-scrollbar-thumb:hover { background: var(--muted); }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>백엔드 멘토</h1>
+    <span class="tag">문서 뷰어</span>
+    <span class="hint-text">대화는 Claude Code 세션에서 진행하세요</span>
+  </header>
+
+  <div class="tabs">
+    <button class="tab-btn active" onclick="switchTab('challenge', this)">챌린지 문서</button>
+    <button class="tab-btn" onclick="switchTab('theory', this)">이론 문서</button>
+    <button class="tab-btn" onclick="switchTab('curriculum', this)">커리큘럼</button>
+    <button class="tab-btn" onclick="switchTab('diagnosis', this)">진단 리포트</button>
+  </div>
+
+  <div class="content-area">
+    <div id="tab-challenge" class="tab-pane active">
+      <div id="challenge-content" class="markdown-body">로딩 중...</div>
+    </div>
+
+    <div id="tab-theory" class="tab-pane">
+      <div class="theory-list-pane">
+        <ul class="theory-list" id="theory-list"></ul>
+      </div>
+      <div class="theory-content-pane">
+        <div id="theory-content" class="markdown-body">
+          <div class="empty-msg">왼쪽에서 이론 문서를 선택해주세요</div>
+        </div>
+      </div>
+    </div>
+
+    <div id="tab-curriculum" class="tab-pane">
+      <div class="theory-list-pane">
+        <ul class="theory-list" id="curriculum-list"></ul>
+      </div>
+      <div class="theory-content-pane">
+        <div id="curriculum-content" class="markdown-body">
+          <div class="empty-msg">왼쪽에서 커리큘럼 문서를 선택해주세요</div>
+        </div>
+      </div>
+    </div>
+
+    <div id="tab-diagnosis" class="tab-pane">
+      <div class="theory-list-pane">
+        <ul class="theory-list" id="diagnosis-list"></ul>
+      </div>
+      <div class="theory-content-pane">
+        <div id="diagnosis-content" class="markdown-body">
+          <div class="empty-msg">왼쪽에서 진단 문서를 선택해주세요</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    function switchTab(name, btn) {
+      document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+      document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
+      btn.classList.add('active');
+      document.getElementById(`tab-${name}`).classList.add('active');
+    }
+
+    async function loadChallenge() {
+      try {
+        const res = await fetch('/api/challenge');
+        const { content } = await res.json();
+        document.getElementById('challenge-content').innerHTML = marked.parse(content);
+      } catch (err) {
+        document.getElementById('challenge-content').innerHTML = '<div class="empty-msg">챌린지 문서를 불러오지 못했어요</div>';
+      }
+    }
+
+    async function loadTheory() {
+      try {
+        const res = await fetch('/api/theory');
+        const files = await res.json();
+        const list = document.getElementById('theory-list');
+        const grouped = {};
+        for (const f of files) {
+          const parts = f.path.split('/');
+          const group = parts.length > 2 ? parts[parts.length - 2] : 'general';
+          (grouped[group] = grouped[group] || []).push(f);
+        }
+        list.innerHTML = Object.entries(grouped).map(([group, items]) =>
+          `<div class="theory-group-title">${group}</div>` +
+          items.map(f =>
+            `<li class="theory-item" onclick="loadTheoryFile('${f.path}', this)">${f.name}</li>`
+          ).join('')
+        ).join('');
+      } catch (err) {
+        document.getElementById('theory-list').innerHTML = '<div class="empty-msg">이론 목록을 불러오지 못했어요</div>';
+      }
+    }
+
+    async function loadTheoryFile(filePath, el) {
+      document.querySelectorAll('#theory-list .theory-item').forEach(i => i.classList.remove('active'));
+      el.classList.add('active');
+      const contentEl = document.getElementById('theory-content');
+      contentEl.innerHTML = '로딩 중...';
+      try {
+        const res = await fetch(`/api/theory/content?path=${encodeURIComponent(filePath)}`);
+        const { content } = await res.json();
+        contentEl.innerHTML = marked.parse(content);
+      } catch (err) {
+        contentEl.innerHTML = '<div class="empty-msg">이론 문서를 불러오지 못했어요</div>';
+      }
+    }
+
+    // 커리큘럼 / 진단 문서는 /api/doc 로 직접 경로 지정해 조회
+    async function loadDocList(listId, contentId, docs) {
+      const list = document.getElementById(listId);
+      list.innerHTML = docs.map(d =>
+        `<li class="theory-item" onclick="loadDoc('${d.path}', '${contentId}', this)">${d.name}</li>`
+      ).join('');
+    }
+
+    async function loadDoc(relPath, contentId, el) {
+      const listEl = el.closest('.theory-list-pane');
+      listEl.querySelectorAll('.theory-item').forEach(i => i.classList.remove('active'));
+      el.classList.add('active');
+      const contentEl = document.getElementById(contentId);
+      contentEl.innerHTML = '로딩 중...';
+      try {
+        const res = await fetch(`/api/doc?path=${encodeURIComponent(relPath)}`);
+        if (!res.ok) throw new Error('not found');
+        const { content } = await res.json();
+        contentEl.innerHTML = marked.parse(content);
+      } catch (err) {
+        contentEl.innerHTML = '<div class="empty-msg">문서를 불러오지 못했어요 (서버가 /api/doc을 지원하지 않을 수 있음)</div>';
+      }
+    }
+
+    // 초기 로드
+    loadChallenge();
+    loadTheory();
+    loadDocList('curriculum-list', 'curriculum-content', [
+      { path: 'curriculum/roadmap.md', name: '12주 로드맵' },
+      { path: 'curriculum/weekly-plan.md', name: '주간 학습 계획' },
+    ]);
+    loadDocList('diagnosis-list', 'diagnosis-content', [
+      { path: 'diagnosis/level-assessment.md', name: '수준 진단' },
+      { path: 'diagnosis/gap-analysis.md', name: '격차 분석' },
+    ]);
+  </script>
+</body>
+</html>
